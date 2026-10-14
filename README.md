@@ -4,7 +4,8 @@ iPhone face and camera prototype for a LEGO BOOST robot.
 
 ## Current Implementation
 
-- SwiftUI robot eyes, nose, and mouth.
+- Landscape SwiftUI robot face with circular cyan eyes, nose, and orange animated eyebrows.
+- Five selectable emotions and automatic blinking; camera and streaming settings in a separate sheet.
 - Front-camera face detection using Apple Vision.
 - LEFT / CENTER / RIGHT position indicator.
 - Optional camera-frame transmission to a Python receiver on a Mac.
@@ -42,5 +43,17 @@ port 8765 to the internet. The access token changes whenever it restarts.
 
 The simulator build has passed. Real-device streaming and orientation
 still require end-to-end validation. This prototype does not control motors.
+
+## Continue on Another Mac
+
+Clone this repository, or run `git pull --ff-only` in an existing checkout.
+Open `LegoRobot.xcodeproj`, select your development team and physical iPhone,
+then run. The current face uses landscape-right orientation. The approved
+visual reference is `design/robot-face-landscape-v1.png`.
+
+Next checks: validate eyebrow emotions and blinking on the phone, verify
+landscape camera orientation and LEFT/RIGHT, then test streaming to the Mac.
+Motor integration requires the existing Python/BLE and DualSense sources,
+which are not in this repository. The head motor is on port `0x02`.
 
 Unofficial hobby project; not affiliated with the LEGO Group.

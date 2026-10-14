@@ -4,30 +4,41 @@ struct ContentView: View {
     @StateObject private var camera = CameraViewModel()
     @AppStorage("macAddress") private var macAddress = ""
     @State private var streaming = false
+    @State private var showingSettings = false
+    @State private var emotion: RobotEmotion = .calm
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
-        ZStack {
+        ZStack(alignment: .topTrailing) {
             Color.black.ignoresSafeArea()
 
+            RobotFaceView(direction: camera.direction, emotion: emotion)
+            Button {
+                showingSettings = true
+            } label: {
+                Image(systemName: "gearshape.fill")
+                    .font(.title2)
+                    .foregroundStyle(.gray)
+                    .frame(width: 48, height: 48)
+            }
+            .accessibilityLabel("Robot settings")
+            .padding(12)
+        }
+        .foregroundStyle(.white)
+        .sheet(isPresented: $showingSettings) {
+            NavigationStack {
             ScrollView {
             VStack(spacing: 22) {
-                RobotEyesView(direction: camera.direction)
-                    .frame(height: 190)
-                    .padding(.top, 24)
-
-                RoundedRectangle(cornerRadius: 5).fill(.cyan)
-                    .frame(width: 40, height: 28)
-                    .overlay(Rectangle().fill(.black).frame(width: 14, height: 8))
-                HStack(spacing: 8) {
-                    ForEach(0..<5) { index in
-                        Rectangle().fill(.cyan).frame(width: 28, height: index == 0 || index == 4 ? 14 : 24)
+                Picker("Emotion", selection: $emotion) {
+                    ForEach(RobotEmotion.allCases) { emotion in
+                        Text(emotion.rawValue).tag(emotion)
                     }
                 }
-                .padding(12)
-                .background(Color(white: 0.12), in: RoundedRectangle(cornerRadius: 6))
-
+                .pickerStyle(.menu)
+                RobotFaceView(direction: camera.direction, emotion: emotion)
+                    .frame(height: 170)
                 CameraPreviewView(session: camera.session)
-                    .aspectRatio(3 / 4, contentMode: .fit)
+                    .aspectRatio(16 / 9, contentMode: .fit)
                     .overlay(alignment: .topLeading) {
                         Text("FRONT CAMERA")
                             .font(.caption.weight(.semibold))
@@ -55,47 +66,144 @@ struct ContentView: View {
                 Text(camera.streamStatus).font(.caption)
             }
             .padding(.horizontal, 18)
+            .padding(.bottom, 24)
+            }
+            .background(.black)
+            .foregroundStyle(.white)
+            .navigationTitle("LEGO Robot")
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { showingSettings = false }
+                }
+            }
+            .preferredColorScheme(.dark)
             }
         }
-        .foregroundStyle(.white)
         .task {
             await camera.start()
+            UIApplication.shared.isIdleTimerDisabled = true
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                UIApplication.shared.isIdleTimerDisabled = true
+                Task { await camera.start() }
+            } else {
+                camera.stop()
+                UIApplication.shared.isIdleTimerDisabled = false
+            }
         }
         .onDisappear {
             camera.stop()
+            UIApplication.shared.isIdleTimerDisabled = false
         }
     }
 }
 
-private struct RobotEyesView: View {
+private enum RobotEmotion: String, CaseIterable, Identifiable {
+    case calm = "Calm", curious = "Curious", happy = "Happy"
+    case focused = "Focused", surprised = "Surprised"
+    var id: String { rawValue }
+
+    func brow(left: Bool) -> (angle: Double, lift: CGFloat) {
+        switch self {
+        case .calm: return (left ? -10 : 10, 0)
+        case .curious: return (left ? -19 : 5, left ? -20 : 0)
+        case .happy: return (left ? -14 : 14, -13)
+        case .focused: return (left ? 15 : -15, 12)
+        case .surprised: return (left ? -3 : 3, -25)
+        }
+    }
+}
+
+private struct RobotFaceView: View {
     let direction: FaceDirection
+    let emotion: RobotEmotion
+    @State private var blinking = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        HStack(spacing: 34) {
-            EyeView(offset: direction.pupilOffset)
-            EyeView(offset: direction.pupilOffset)
+        GeometryReader { geometry in
+            let scale = min(geometry.size.width / 760, geometry.size.height / 330)
+            ZStack {
+                RoundedRectangle(cornerRadius: 30).fill(Color(white: 0.86))
+                RoundedRectangle(cornerRadius: 12).fill(Color(white: 0.13)).padding(22)
+                HStack(spacing: 210) {
+                    Rectangle().fill(.cyan).frame(width: 12, height: 135)
+                    Rectangle().fill(.cyan).frame(width: 12, height: 135)
+                }
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(LinearGradient(colors: [.gray, .white, .gray], startPoint: .top, endPoint: .bottom))
+                    .frame(width: 150, height: 30)
+                HStack(spacing: 150) {
+                    EyeView(offset: direction.pupilOffset, blinking: blinking, emotion: emotion)
+                    EyeView(offset: direction.pupilOffset, blinking: blinking, emotion: emotion)
+                }
+                ForEach([true, false], id: \.self) { left in
+                    let pose = emotion.brow(left: left)
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(LinearGradient(colors: [.orange, Color(red: 1, green: 0.28, blue: 0)], startPoint: .top, endPoint: .bottom))
+                        .overlay(RoundedRectangle(cornerRadius: 3).stroke(.white.opacity(0.5), lineWidth: 1))
+                        .frame(width: 240, height: 24)
+                        .rotationEffect(.degrees(pose.angle))
+                        .offset(x: left ? -175 : 175, y: -108 + pose.lift)
+                }
+                HStack(spacing: 6) {
+                    ForEach(0..<5) { _ in
+                        RoundedRectangle(cornerRadius: 3).fill(Color(white: 0.9)).frame(width: 80, height: 24)
+                    }
+                }
+                .offset(y: 137)
+            }
+            .frame(width: 760, height: 330)
+            .scaleEffect(scale)
+            .position(x: geometry.size.width / 2, y: geometry.size.height / 2)
+            .animation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.75), value: emotion)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: direction)
         }
-        .animation(.spring(response: 0.22, dampingFraction: 0.72), value: direction)
-        .accessibilityLabel("Robot eyes")
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Robot face, \(emotion.rawValue), \(direction.rawValue)")
+        .task {
+            while !Task.isCancelled {
+                do {
+                    try await Task.sleep(for: .seconds(4))
+                    guard !reduceMotion else { continue }
+                    withAnimation(.easeInOut(duration: 0.1)) { blinking = true }
+                    try await Task.sleep(for: .milliseconds(160))
+                    withAnimation(.easeInOut(duration: 0.14)) { blinking = false }
+                } catch {
+                    blinking = false
+                    return
+                }
+            }
+        }
     }
 }
 
 private struct EyeView: View {
     let offset: CGFloat
+    let blinking: Bool
+    let emotion: RobotEmotion
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color(white: 0.12))
-                .overlay(RoundedRectangle(cornerRadius: 6).stroke(.cyan, lineWidth: 5).padding(5))
-
-            RoundedRectangle(cornerRadius: 3)
-                .fill(.cyan)
-                .frame(width: 42, height: 70)
-                .overlay(Rectangle().fill(.white).frame(width: 12, height: 12).offset(x: -8, y: -19))
-                .offset(x: offset)
+            Circle().fill(.black).overlay(Circle().stroke(Color(white: 0.28), lineWidth: 6))
+            ZStack {
+                Circle().fill(RadialGradient(colors: [.white, .cyan, Color(red: 0, green: 0.25, blue: 0.4)], center: .center, startRadius: 4, endRadius: 75))
+                Circle().stroke(.cyan, lineWidth: 4)
+                ForEach(0..<4) { index in
+                    Circle().fill(.cyan.opacity(0.6)).overlay(Circle().stroke(.white.opacity(0.65), lineWidth: 2))
+                        .frame(width: 30, height: 30)
+                        .offset(x: index % 2 == 0 ? -36 : 36, y: index < 2 ? -36 : 36)
+                }
+                Circle().fill(Color(white: 0.06)).frame(width: 40, height: 40)
+                    .overlay(Circle().stroke(.cyan, lineWidth: 3))
+                    .offset(x: offset)
+                Circle().fill(.white).frame(width: 12, height: 12).offset(x: -18, y: -26)
+            }
+            .frame(width: 146, height: 146)
+            .scaleEffect(x: 1, y: blinking ? 0.05 : emotion == .happy ? 0.75 : 1)
         }
-        .frame(width: 112, height: 132)
+        .frame(width: 200, height: 200)
     }
 }
 

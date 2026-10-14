@@ -129,7 +129,7 @@ final class CameraViewModel: NSObject, ObservableObject {
         session.addOutput(videoOutput)
 
         if let connection = videoOutput.connection(with: .video) {
-            connection.videoRotationAngle = 90
+            connection.videoRotationAngle = 0
             connection.isVideoMirrored = true
         }
 
@@ -152,7 +152,7 @@ final class CameraViewModel: NSObject, ObservableObject {
 
         let handler = VNImageRequestHandler(
             cmSampleBuffer: sampleBuffer,
-            orientation: .leftMirrored,
+            orientation: .up,
             options: [:]
         )
 

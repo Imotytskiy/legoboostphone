@@ -17,6 +17,15 @@ struct CameraPreviewView: UIViewRepresentable {
 }
 
 final class PreviewView: UIView {
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        if let connection = videoPreviewLayer.connection {
+            connection.videoRotationAngle = 0
+            connection.automaticallyAdjustsVideoMirroring = false
+            if connection.isVideoMirroringSupported { connection.isVideoMirrored = true }
+        }
+    }
+
     override class var layerClass: AnyClass {
         AVCaptureVideoPreviewLayer.self
     }
